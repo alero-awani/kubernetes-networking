@@ -112,3 +112,96 @@ Note: `IP*` `TO_IP*` -> IPS of the Virtual Ethernets.
     ```sh
     sudo ip link set dev br0 up
     ```
+
+1. Enabling the interfaces connected to the bridge
+
+    ```sh
+    sudo ip link set dev veth10 up
+    sudo ip link set dev veth20 up
+    ```
+
+1. Setting the loopback interfaces in the network namespaces
+
+    ```sh
+    sudo ip netns exec $NS1 ip link set lo up
+    sudo ip netns exec $NS2 ip link set lo up
+        # Confirm what adapters are attached to the namespaces
+        sudo ip netns exec $NS1 ip a
+        sudo ip netns exec $NS2 ip a
+    ```
+
+1. Setting the default route in the network namespaces
+
+    ```sh
+    sudo ip netns exec $NS1 ip route add default via $BRIDGE_IP dev veth11
+    sudo ip netns exec $NS2 ip route add default via $BRIDGE_IP dev veth21
+   ```
+
+   Here we are setting up a route going from NS1 and NS2 to the outside world. So it goes `NS1->Veth11->Br0`and can now communicate with NS2 through the same type of connection from NS2.
+1. Looking at the currently configured Interfaces in VM1
+    ![img](assets/page-3.png)
+1. Now to enable VM1 node and VM2 node communicate, we have to setup a route between them.
+
+    ```sh
+    sudo ip route add $TO_BRIDGE_SUBNET via $TO_NODE_IP dev enp0s8
+    ```
+
+    - `TO_BRIDGE_SUBNET="172.16.1.0/24"` - Bridge Subnet for VM2
+    - `TO_NODE_IP="192.168.56.11"` - This is the IP of VM 2
+
+    From the image of the available interfaces, `enp0s3` is the **private NAT network** while `enp0s8` is the **Host-Only network/ Node Subnet**
+
+    So it goes enp0s8 (Adapter/NodeSubnet VM1)->(adapter/NodeSubnet VM2)->(bridge Subnet VM2)
+
+1. Enables IP forwarding on the node
+
+   ```sh
+    sudo sysctl -w net.ipv4.ip_forward=1
+   ```
+
+1. Next setup the second VM (Be sure to set the variables correctly)
+
+    ```sh
+      NS1="NS1"
+      NS2="NS2"
+      NODE_IP="192.168.56.11"
+      BRIDGE_SUBNET="172.16.1.0/24"
+      BRIDGE_IP="172.16.1.1"
+      IP1="172.16.1.2"
+      IP2="172.16.1.3"
+      TO_NODE_IP="192.168.56.10"
+      TO_BRIDGE_SUBNET="172.16.0.0/24"
+      TO_BRIDGE_IP="172.16.0.1"
+      TO_IP1="172.16.0.2"
+      TO_IP2="172.16.0.3"
+    ```
+
+1. Tests
+
+    ```sh
+    #Ping adaptor attached to NS1
+    sudo ip netns exec $NS1 ping -W 1 -c 2 172.16.0.2
+
+    #Ping the bridge
+    sudo ip netns exec $NS1 ping -W 1 -c 2 172.16.0.1
+
+    #Ping the adaptor of the second container
+    sudo ip netns exec $NS1 ping -W 1 -c 2 172.16.0.3
+
+    #Ping the other server (Ubuntu2)
+    sudo ip netns exec $NS1 ping -W 1 -c 2 192.168.56.11
+
+    #Ping the bridge on "Ubuntu2" server
+    sudo ip netns exec $NS1 ping -W 1 -c 2 172.16.1.1
+
+    #Ping the first container on "Ubuntu2"
+    sudo ip netns exec $NS1 ping -W 1 -c 2 172.16.1.2
+
+    #Ping the second container on "Ubuntu2"
+    sudo ip netns exec $NS1 ping -W 1 -c 10 172.16.1.3
+
+    ```
+
+Everything should work perfectly, yay! 🎉
+
+
