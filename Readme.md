@@ -214,4 +214,32 @@ Note: `IP*` `TO_IP*` -> IPS of the Virtual Ethernets.
 
 Everything should work perfectly, yay! 🎉
 
+### Test with Tshark
 
+1. Save on your VM
+
+    ```sh
+    nano tshark.sh
+    chmod +x ./tshark.sh
+    ```
+
+2. Install tshark
+
+    ```sh
+    sudo apt update
+    sudo apt install wireshark-common
+    sudo apt install tshark
+    ```
+
+3. Run the script
+
+    ```sh
+    ./tshark.sh veth10
+    ```
+
+4. Ping the Second VM from the first
+    ![alt text](assets/ping.png)
+
+    `172.16.0.2 → 192.168.56.11` (ping request)
+
+    `192.168.56.11 → 172.16.0.2` (ping reply)
