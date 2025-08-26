@@ -1,6 +1,16 @@
 # Kubernetes Networking
 
-## Notes
+## Table of Content
+
+- [References](#references)
+- [Notes](#notes)
+- [Exercise: Create and Connect Containers Across VMs](#exercise-create-and-connect-containers-across-vms)
+
+### References
+
+[Kubernetes Networking Series](https://www.youtube.com/playlist?list=PLSAko72nKb8QWsfPpBlsw-kOdMBD7sra-)
+
+### Notes
 
 ![alt text](assets/page-1.png)
 
