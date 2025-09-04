@@ -24,6 +24,8 @@ exit
 
 #Next, install Kubernetes. First you need to add the repository's GPG key with the command:
 sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo mkdir -p /etc/apt/keyrings
+sudo chmod 755 /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
@@ -37,10 +39,9 @@ sudo systemctl enable --now kubelet
 #Modify "sysctl.conf" to allow Linux Node’s iptables to correctly see bridged traffic
 #Controls whether packets traversing a Linux bridge (like the one Docker or containerd uses for containers) should also be passed through the iptables firewall rules.
 #Without this iptables never sees the packets.
-sudo nano /etc/sysctl.conf
-    #Add this line: net.bridge.bridge-nf-call-iptables = 1
+echo "net.bridge.bridge-nf-call-iptables = 1" | sudo tee -a /etc/sysctl.conf
 
-sudo -s
+
 #Allow packets arriving at the node's network interface to be forwaded to pods. 
 # Tells the Linux kernel: “This machine should act like a router, not just a host.”
 # Enables forwarding of IP packets between different network interfaces.
@@ -72,6 +73,8 @@ sudo kubeadm config images pull
 #Make sure "kube-proxy" is not installed, we want cilium to use the new "eBPF" based proxy
 sudo kubeadm init --skip-phases=addon/kube-proxy --apiserver-advertise-address=192.168.56.10
                    
+sudo kubeadm init --apiserver-advertise-address=192.168.56.10
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.57.10 #flannel
 
 #*****************************************************
 #Once the "init" command has completed successfuly, run the "kubeadm join ..." 
@@ -146,6 +149,7 @@ scp -r $HOME/.kube gary@$node1:/home/gary
 #**************************************************Cluster installation tests*******************************************************
 #Optionally untaintthe master node
 kubectl taint nodes vm1 node-role.kubernetes.io/control-plane:NoSchedule-
+kubectl taint nodes vm1-proxy node-role.kubernetes.io/control-plane:NoSchedule-
 
 #Schedule a Kubernetes deployment using a container from Google samples
 kubectl create deployment hello-world --image=gcr.io/google-samples/hello-app:1.0
