@@ -45,10 +45,9 @@ echo "net.bridge.bridge-nf-call-iptables = 1" | sudo tee -a /etc/sysctl.conf
 #Allow packets arriving at the node's network interface to be forwaded to pods. 
 # Tells the Linux kernel: “This machine should act like a router, not just a host.”
 # Enables forwarding of IP packets between different network interfaces.
-sudo echo '1' > /proc/sys/net/ipv4/ip_forward
-# or
+
 echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
-exit
+
 
 #Reload the configurations with the command:
 sudo sysctl --system
@@ -68,13 +67,18 @@ sudo swapoff -a
 #Pull the necessary containers with the command:
 sudo kubeadm config images pull
 
+#If kubeadm fails
+containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+check -> https://github.com/kubernetes/kubernetes/issues/112622 or https://github.com/kubernetes/kubernetes/issues/110177
+
 #************************************************** This section must be run only on the Master node*************************************************************************************************
 
 #Make sure "kube-proxy" is not installed, we want cilium to use the new "eBPF" based proxy
-sudo kubeadm init --skip-phases=addon/kube-proxy --apiserver-advertise-address=192.168.56.10
-                   
-sudo kubeadm init --apiserver-advertise-address=192.168.56.10
-sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.57.10 #flannel
+sudo kubeadm init --skip-phases=addon/kube-proxy --apiserver-advertise-address=192.168.56.10 #cilium installation
+
+#kube-proxy CNI installtion
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.57.10 #flannel installation for kube-proxy
 
 #*****************************************************
 #Once the "init" command has completed successfuly, run the "kubeadm join ..." 
@@ -83,15 +87,9 @@ sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address
 sudo kubeadm join 192.168.56.10:6443 --token t1nf47.nzgkqlnwck1ct49w \
         --discovery-token-ca-cert-hash sha256:310a544f3ec7e9361e77320207343a1de392d4b45f0b1cbf64dc59783297d2ed 
 
-#If kubeadm fails
-containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
-sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
 
-# or 
-sudo nano /etc/containerd/config.toml
-set SystemdCgroup = true & sandbox_image = "registry.k8s.io/pause:3.9"
-
-check -> https://github.com/kubernetes/kubernetes/issues/112622 or https://github.com/kubernetes/kubernetes/issues/110177
+#Install flannel
+ kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 
 # Check the logs
 sudo journalctl -u kubelet -f
@@ -114,13 +112,14 @@ rm cilium-linux-amd64.tar.gz{,.sha256sum}
 #Setup Helm repository
 helm repo add cilium https://helm.cilium.io/
 
-#Deploy Cilium release via Helm:
-helm install cilium cilium/cilium --version 1.15.8 \
-    --namespace kube-system \
-    --set kubeProxyReplacement=strict \
-    --set k8sServiceHost=192.168.56.10 \
-    --set k8sServicePort=6443
-
+# Kernel requirements => https://docs.cilium.io/en/stable/operations/system_requirements/?utm_source=chatgpt.com#required-kernel-versions-for-advanced-features
+helm upgrade cilium cilium/cilium --version 1.18.1 \
+  --namespace=kube-system \
+  --set encryption.enabled=true \
+  --set encryption.ipsec.encryptedOverlay=true \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=192.168.56.10 \
+  --set k8sServicePort=6443
 #***If "kubectl get nodes" shows "Not Ready"
 #***Or  "kubectl get pods -n kube-system" shows "coredns-*" as "Pending",
 #**Reboot node(s)
@@ -134,7 +133,7 @@ echo $MASTER_CILIUM_POD
 #validate that the Cilium agent is running in the desired mode (non kube-proxy)
 kubectl exec -it -n kube-system $MASTER_CILIUM_POD -- cilium status | grep 
 
-kubectl exec -it -n kube-system cilium-68xxx -- cilium status | grep KubeProxyReplacement
+kubectl exec -it -n kube-system cilium-jdghc -- cilium status | grep KubeProxyReplacement
 
 #Validate that Cilium installation
 cilium status --wait
@@ -148,7 +147,7 @@ scp -r $HOME/.kube gary@$node1:/home/gary
 
 #**************************************************Cluster installation tests*******************************************************
 #Optionally untaintthe master node
-kubectl taint nodes vm1 node-role.kubernetes.io/control-plane:NoSchedule-
+kubectl taint nodes vm1-cilium node-role.kubernetes.io/control-plane:NoSchedule-
 kubectl taint nodes vm1-proxy node-role.kubernetes.io/control-plane:NoSchedule-
 
 #Schedule a Kubernetes deployment using a container from Google samples

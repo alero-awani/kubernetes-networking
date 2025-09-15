@@ -24,28 +24,28 @@ sudo sysctl -w kernel.kptr_restrict=0
 
 3. Generate traffic to pods
 
+Run from host system
 ```sh
+cilium
+kubectl port-forward svc/hello-world 8080:8080
+
 for i in {1..30000}; do
   echo "Request $i:"
-  curl -s http://localhost:30570
-  echo
+  curl -s curl http://localhost:8080
 done
-```
 
-```sh
-for i in {1..3000}; do
+kubeproxy
+for i in {1..30000}; do
   echo "Request $i:"
-  curl -s http://192.168.56.10:32633
-  echo
+  curl -s http://192.168.57.10:30653
 done
 ```
-
 
 ```sh
 sudo conntrack -S
 ```
 
 ```sh
-sudo perf top -a -e cycles:k --stdio
+sudo perf top -a -e cycles:k
 
 ```
